@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\Author\PortofolioController;
 use App\Http\Controllers\Author\ProductController;
 use App\Http\Controllers\Author\UploadContorller;
 use App\Http\Controllers\Author\UploadController;
@@ -15,6 +17,8 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('admin')->group(function () {
         Route::get('/users', [UsersController::class, 'index']);
+
+        Route::get('/products', [AdminProductController::class, 'index']);
 
         Route::get('/categories', [CategoryController::class, 'index']);
         Route::post('/categories', [CategoryController::class, 'store']);
@@ -32,6 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
             '/uploads',
             [UploadController::class, 'destroy']
         );
+
+        Route::get('portfolio',[PortofolioController::class,'portfolio']);
     });
 });
 

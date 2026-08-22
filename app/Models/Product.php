@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-      use SoftDeletes;
+    use SoftDeletes;
 
     protected $fillable = [
         'author_id',
@@ -42,5 +42,11 @@ class Product extends Model
     public function licenses()
     {
         return $this->hasMany(ProductLicense::class);
+    }
+
+    public function leastPrice()
+    {
+        return $this->hasOne(ProductLicense::class)
+            ->ofMany('price', 'min');
     }
 }
