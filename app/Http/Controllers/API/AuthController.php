@@ -63,7 +63,7 @@ class AuthController extends Controller
             'name' => $request->first_name . ' ' . $request->last_name,
             'email'      => $request->email,
             'password'   => Hash::make($request->password),
-            'role' => $request->role,
+            'role' => in_array($request->role, ['author', 'customer'], true) ? $request->role : 'customer',
         ]);
 
         return response()->json([

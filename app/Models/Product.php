@@ -24,6 +24,12 @@ class Product extends Model
         'status'
     ];
 
+    public function versions(){ return $this->hasMany(ProductVersion::class); }
+
+    public function reviews(){ return $this->hasMany(ProductReview::class); }
+
+    public function reviewMessages(){ return $this->hasMany(ProductReviewMessage::class); }
+
     public function author()
     {
         return $this->belongsTo(User::class, 'author_id');

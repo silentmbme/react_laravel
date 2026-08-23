@@ -3,83 +3,43 @@
 namespace App\Http\Controllers\Author;
 
 use App\Http\Controllers\Controller;
+use App\Services\MarketplaceSettings;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class UploadController extends Controller
 {
-    public function presignedUrl(Request $request)
+    public function presignedUrl(Request $request, MarketplaceSettings $settings)
     {
-
         $request->validate([
-
-            'file_name' => 'required',
-
-            'folder' => 'required'
-
+            'file_name' => ['required', 'string', 'max:255'],
+            'folder' => ['required', 'string', 'max:100'],
         ]);
 
-        $path = sprintf(
+        $path = sprintf('user_%s/%s/%s_%s', auth()->id(), trim($request->folder, '/'), uniqid(), basename($request->file_name));
+        $disk = $settings->r2Disk();
+        $bucket = $settings->r2Bucket();
+        abort_unless($bucket, 422, 'Cloud storage is not configured.');
 
-            "%s/%s/%s_%s",
-            'user_'.auth()->id(),
-            $request->folder,
-            uniqid(),
-            $request->file_name
+        $command = $disk->getClient()->getCommand('PutObject', [
+            'Bucket' => $bucket,
+            'Key' => $path,
+        ]);
 
-        );
-
-        Log::info($path);
-
-        $disk = Storage::disk('r2');
-
-        $client = $disk->getClient();
-
-        $command = $client->getCommand(
-            'PutObject',
-            [
-
-                'Bucket' =>
-                config(
-                    'filesystems.disks.r2.bucket'
-                ),
-
-                'Key' => $path
-
-            ]
-        );
-
-        $presignedRequest =
-            $client->createPresignedRequest(
-                $command,
-                '+30 minutes'
-            );
+        $presignedRequest = $disk->getClient()->createPresignedRequest($command, '+30 minutes');
 
         return response()->json([
-
-            'upload_url' =>
-            (string)
-            $presignedRequest
-                ->getUri(),
-
-            'path' => $path
-
+            'upload_url' => (string) $presignedRequest->getUri(),
+            'path' => $path,
         ]);
     }
 
-    public function destroy(Request $request)
+    public function destroy(Request $request, MarketplaceSettings $settings)
     {
+        $request->validate(['path' => ['required', 'string']]);
+        abort_unless(str_starts_with($request->path, 'user_'.auth()->id().'/'), 403, 'You can only delete your own files.');
 
-        $request->validate([
-            'path' => 'required|string'
-        ]);
+        $settings->r2Disk()->delete($request->path);
 
-        Storage::disk('r2')
-            ->delete($request->path);
-
-        return response()->json([
-            'message' => 'Deleted'
-        ]);
+        return response()->json(['message' => 'Deleted']);
     }
 }
