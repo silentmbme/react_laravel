@@ -1,0 +1,3 @@
+<?php
+namespace App\Models;use Illuminate\Database\Eloquent\Model;
+class SupportTicket extends Model {protected $fillable=['purchase_verification_id','product_id','customer_id','author_id','subject','status','last_replied_at'];protected $casts=['last_replied_at'=>'datetime'];public function product(){return $this->belongsTo(Product::class);}public function customer(){return $this->belongsTo(User::class,'customer_id');}public function author(){return $this->belongsTo(User::class,'author_id');}public function messages(){return $this->hasMany(SupportTicketMessage::class);}public function verification(){return $this->belongsTo(PurchaseVerification::class,'purchase_verification_id');}}
