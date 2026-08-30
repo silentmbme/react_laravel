@@ -1,0 +1,6 @@
+<?php
+use Illuminate\Database\Migrations\Migration; use Illuminate\Database\Schema\Blueprint; use Illuminate\Support\Facades\Schema;
+return new class extends Migration { public function up(): void {
+ Schema::create('commission_tiers',function(Blueprint $table){$table->id();$table->string('name');$table->decimal('min_lifetime_sales',12,2)->default(0);$table->decimal('platform_fee_percent',5,2);$table->boolean('is_active')->default(true);$table->unsignedInteger('sort_order')->default(0);$table->timestamps();$table->unique('min_lifetime_sales');});
+ Schema::create('author_earnings',function(Blueprint $table){$table->id();$table->foreignId('author_id')->constrained('users')->restrictOnDelete();$table->foreignId('order_id')->constrained()->cascadeOnDelete();$table->foreignId('order_item_id')->constrained()->cascadeOnDelete();$table->string('commission_tier_name')->nullable();$table->decimal('gross_amount',12,2);$table->decimal('platform_fee_amount',12,2);$table->decimal('net_amount',12,2);$table->char('currency',3)->default('USD');$table->string('status')->default('available')->index();$table->timestamp('available_at')->nullable();$table->timestamps();$table->unique('order_item_id');$table->index(['author_id','status','available_at']);});
+} public function down(): void {Schema::dropIfExists('author_earnings');Schema::dropIfExists('commission_tiers');}};

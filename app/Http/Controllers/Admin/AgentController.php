@@ -1,0 +1,10 @@
+<?php
+namespace App\Http\Controllers\Admin;
+use App\Http\Controllers\Controller; use App\Models\User; use App\Models\UserPermission; use Illuminate\Http\Request; use Illuminate\Support\Facades\Hash;
+class AgentController extends Controller {
+ private function authorize(Request $request):void{abort_unless($request->user()?->role==='superadmin',403,'Superadmin access required.');}
+ public function index(Request $request){$this->authorize($request);$v=$request->validate(['search'=>['nullable','string','max:120'],'per_page'=>['nullable','integer','min:5','max:100']]);$q=User::whereIn('role',['admin','reviewer'])->with('permissions')->latest();if(!empty($v['search']))$q->where(fn($x)=>$x->where('name','like','%'.$v['search'].'%')->orWhere('email','like','%'.$v['search'].'%'));return $q->paginate($v['per_page']??20);}
+ public function store(Request $request){$this->authorize($request);$v=$request->validate(['name'=>['required','string','max:120'],'email'=>['required','email','max:255','unique:users,email'],'password'=>['required','string','min:8'],'role'=>['required','in:admin,reviewer'],'permissions'=>['array'],'permissions.*'=>['in:review.products']]);$user=User::create(['name'=>$v['name'],'email'=>$v['email'],'password'=>Hash::make($v['password']),'role'=>$v['role']]);$this->sync($user,$v['permissions']??[]);return response()->json(['agent'=>$user->load('permissions')],201);}
+ public function update(Request $request,User $user){$this->authorize($request);abort_unless(in_array($user->role,['admin','reviewer'],true),422,'Only staff agents can be managed here.');$v=$request->validate(['role'=>['required','in:admin,reviewer'],'permissions'=>['array'],'permissions.*'=>['in:review.products']]);$user->update(['role'=>$v['role']]);$this->sync($user,$v['permissions']??[]);return response()->json(['agent'=>$user->fresh('permissions')]);}
+ private function sync(User $user,array $permissions):void{UserPermission::where('user_id',$user->id)->where('permission','review.products')->delete();if(in_array('review.products',$permissions,true))UserPermission::create(['user_id'=>$user->id,'permission'=>'review.products']);}
+}

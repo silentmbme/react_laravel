@@ -1,148 +1,18 @@
 <?php
-
 namespace App\Http\Controllers\Author;
-
-use App\Http\Controllers\Controller;
-use App\Models\Category;
-use App\Models\License;
-use App\Models\Product;
-use App\Models\ProductImage;
-use App\Models\ProductLicense;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
-
-
-class ProductController extends Controller
-{
-    public function create()
-    {
-        return response()->json([
-
-            'categories' =>  $this->buildTree(
-                Category::where('status', 1)
-                    ->orderBy('name')
-                    ->get()
-            ),
-
-            'licenses' => License::where('status', 1)->get()
-
-        ]);
-    }
-
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            "name" =>  'required',
-            "category_id" =>  'required',
-            "short_description" =>  'required',
-            "description" =>  'required',
-            "thumbnail" =>  'required',
-            "preview_images" =>  'required',
-            "file" =>  'required',
-            "version" =>  'required',
-            "demo_url" =>  'required',
-            "status" =>  'required',
-            'licenses' => 'required|array|min:1',
-            'licenses.*' => 'required|numeric|min:0',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()]);
-        }
-
-        $licenseIds = array_keys($request->licenses);
-
-        $validLicenseIds = License::whereIn('id', $licenseIds)
-            ->pluck('id')
-            ->toArray();
-
-        if (count($licenseIds) !== count($validLicenseIds)) {
-
-            return response()->json([
-                'errors' => [
-                    'licenses' => ['One or more selected licenses are invalid.']
-                ]
-            ], 422);
-        }
-        // return response()->json($request->all());
-
-        $product = Product::updateOrCreate(['id' => $request->id], [
-            'author_id' => Auth::user()->id,
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'slug' => Str::slug($request->name),
-            'short_description' => $request->short_description,
-            'description' => $request->description,
-            'thumbnail' => $request->thumbnail,
-            'file' => $request->file,
-            'file_size' => $request->file_size,
-            'version' => $request->version,
-            'demo_url' => $request->demo_url,
-            'status'  => $request->status,
-        ]);
-
-        $images = [];
-
-        foreach ($request->preview_images as $image) {
-
-            $images[] = [
-                'product_id' => $product->id,
-                'image' => $image, // or 'path' => $image
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
-
-        ProductImage::insert($images);
-
-
-        $licenses = [];
-
-        foreach ($request->licenses as $licenseId => $price) {
-
-            $licenses[] = [
-                'product_id' => $product->id,
-                'license_id' => $licenseId,
-                'price' => $price,
-                // 'created_at' => now(),
-                // 'updated_at' => now(),
-            ];
-        }
-
-        ProductLicense::insert($licenses);
-
-        return response()->json($request->all());
-    }
-
-    private function buildTree($categories, $parentId = null, $level = 0)
-    {
-        $result = [];
-
-        foreach (
-            $categories->where('parent_id', $parentId)
-            as $category
-        ) {
-
-            $category->display_name =
-                str_repeat('— ', $level)
-                . $category->name;
-
-            $result[] = $category;
-
-            $children = $this->buildTree(
-                $categories,
-                $category->id,
-                $level + 1
-            );
-
-            $result = array_merge(
-                $result,
-                $children
-            );
-        }
-
-        return $result;
-    }
+use App\Http\Controllers\Controller;use App\Models\Category;use App\Models\License;use App\Models\Product;use App\Models\ProductImage;use App\Models\ProductLicense;use Illuminate\Http\Request;use Illuminate\Support\Facades\Auth;use Illuminate\Support\Facades\DB;use Illuminate\Support\Str;
+class ProductController extends Controller{
+ public function create(){
+  $lifetime=(float) \App\Models\AuthorEarning::where('author_id',Auth::id())->sum('gross_amount');
+  $tier=\App\Models\CommissionTier::where('is_active',true)->where('min_lifetime_sales','<=',$lifetime)->orderByDesc('min_lifetime_sales')->first();
+  return response()->json([
+    'categories'=>$this->pricingTree(),
+    'licenses'=>License::where('status',1)->orderBy('sort_order')->orderBy('name')->get(),
+    'pricing'=>['commission_percent'=>(float)($tier?->platform_fee_percent??0),'commission_tier'=>$tier?->name,'currency'=>'USD']
+  ]);
+ }
+ public function store(Request $r){$v=$r->validate(['id'=>['nullable','prohibited'],'name'=>['required','string','max:255'],'category_id'=>['required','exists:categories,id'],'short_description'=>['required','string'],'description'=>['required','string'],'thumbnail'=>['required','string'],'preview_images'=>['required','array','min:1'],'preview_images.*'=>['string'],'file'=>['required','string'],'file_size'=>['nullable','integer','min:0'],'version'=>['required','string','max:50'],'demo_url'=>['nullable','url'],'status'=>['required','in:draft,pending'],'support_enabled'=>['nullable','boolean'],'licenses'=>['required','array','min:1'],'licenses.*'=>['required','numeric','min:0']]);$ids=array_keys($v['licenses']);$category=Category::findOrFail($v['category_id'])->pricingCategory();abort_unless($category->licenses()->where('status',true)->whereIn('licenses.id',$ids)->count()===count($ids),422,'One or more licenses are not enabled for this category.');$product=DB::transaction(function()use($v){$slug=$this->uniqueSlug($v['name']);$p=Product::create(['author_id'=>Auth::id(),'category_id'=>$v['category_id'],'name'=>$v['name'],'slug'=>$slug,'short_description'=>$v['short_description'],'description'=>$v['description'],'thumbnail'=>$v['thumbnail'],'file'=>$v['file'],'file_size'=>$v['file_size']??null,'version'=>$v['version'],'demo_url'=>$v['demo_url']??null,'status'=>$v['status'],'support_enabled'=>$v['support_enabled']??true]);$p->images()->createMany(collect($v['preview_images'])->map(fn($image)=>['image'=>$image])->all());$p->licenses()->createMany(collect($v['licenses'])->map(fn($price,$license)=>['license_id'=>$license,'price'=>$price])->values()->all());return $p;});return response()->json(['message'=>$product->status==='pending'?'Product submitted for review.':'Draft saved.','product'=>$product],201);}
+ private function pricingTree(){ $categories=Category::where('status',1)->with('licenses')->orderBy('name')->get(); foreach($categories as $category){$category->setRelation('licenses',$category->pricingCategory()->licenses);} return $this->buildTree($categories);}
+ private function uniqueSlug($name){$base=Str::slug($name);$slug=$base;$n=2;while(Product::withTrashed()->where('slug',$slug)->exists()){$slug=$base.'-'.$n++;}return $slug;}
+ private function buildTree($categories,$parentId=null,$level=0){$out=[];foreach($categories->where('parent_id',$parentId) as $category){$category->display_name=str_repeat('— ',$level).$category->name;$out[]=$category;$out=array_merge($out,$this->buildTree($categories,$category->id,$level+1));}return $out;}
 }

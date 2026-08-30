@@ -1,0 +1,1 @@
+<?php namespace App\Models;use Illuminate\Database\Eloquent\Model;class ProductReview extends Model{protected $fillable=['product_id','reviewer_id','decision','note'];public function reviewer(){return $this->belongsTo(User::class,'reviewer_id');}}
