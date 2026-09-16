@@ -1,0 +1,7 @@
+<?php
+namespace App\Services;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+class GmailApiMailer {
+ public function send(string $to,string $subject,string $html):void{$s=(new MarketplaceSettings())->group('mail');foreach(['gmail_client_id','gmail_client_secret','gmail_refresh_token','from_address'] as $key)if(empty($s[$key]))throw new RuntimeException('Gmail API is not fully configured in Admin Settings.');$token=Http::asForm()->timeout(20)->post('https://oauth2.googleapis.com/token',['client_id'=>$s['gmail_client_id'],'client_secret'=>$s['gmail_client_secret'],'refresh_token'=>$s['gmail_refresh_token'],'grant_type'=>'refresh_token'])->throw()->json('access_token');if(!$token)throw new RuntimeException('Google did not return an access token.');$from=$s['from_address'];$name=$s['from_name']??'MarketPlace';$encoded='=?UTF-8?B?'.base64_encode($subject).'?=';$raw="From: {$name} <{$from}>\r\nTo: {$to}\r\nSubject: {$encoded}\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{$html}";$raw=rtrim(strtr(base64_encode($raw),'+/','-_'),'=');Http::withToken($token)->timeout(25)->post('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',['raw'=>$raw])->throw();}
+}

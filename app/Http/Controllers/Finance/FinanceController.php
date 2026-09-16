@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Models\AuthorEarning;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\User;
 use App\Services\MarketplaceSettings;
 use Illuminate\Http\Request;
 
@@ -71,11 +73,27 @@ class FinanceController extends Controller
 
     public function adminOverview(Request $request)
     {
-        abort_unless($request->user()?->role === 'superadmin', 403, 'Superadmin access required.');
+        abort_unless(in_array($request->user()?->role, ['admin', 'superadmin'], true), 403, 'Admin access required.');
         $orders = Order::where('status', 'paid');
         $earnings = AuthorEarning::query();
-        return response()->json(['summary' => ['paid_orders' => (clone $orders)->count(), 'gross_sales' => (float) (clone $orders)->sum('total'), 'platform_revenue' => (float) (clone $earnings)->sum('platform_fee_amount'), 'author_payable' => (float) (clone $earnings)->sum('net_amount'), 'currency' => 'USD'], 'recent_orders' => (clone $orders)->with('user', 'items')->latest('paid_at')->take(20)->get()->map(fn ($order) => $this->order($order, app(MarketplaceSettings::class)))]);
+        return response()->json(['summary' => ['paid_orders' => (clone $orders)->count(), 'gross_sales' => (float) (clone $orders)->sum('total'), 'platform_revenue' => (float) (clone $earnings)->sum('platform_fee_amount'), 'author_payable' => (float) (clone $earnings)->sum('net_amount'), 'currency' => 'USD'], 'operations' => ['pending_reviews' => Product::where('status', 'pending')->count(), 'published_products' => Product::where('status', 'published')->count(), 'customers' => User::where('role', 'customer')->count(), 'authors' => User::where('role', 'author')->count()], 'recent_orders' => (clone $orders)->with('user', 'items')->latest('paid_at')->take(8)->get()->map(fn ($order) => $this->order($order, app(MarketplaceSettings::class)))]);
     }
+    public function adminOrders(Request $request, MarketplaceSettings $settings)
+    {
+        abort_unless(in_array($request->user()?->role, ['admin', 'superadmin'], true), 403, 'Admin access required.');
+        $filters = $request->validate(['status' => ['nullable', 'in:all,pending,paid,failed,cancelled'], 'search' => ['nullable', 'string', 'max:120'], 'per_page' => ['nullable', 'integer', 'min:5','max:100']]);
+        $orders = Order::query()->with(['user:id,name,email', 'items'])->latest('created_at')->when(($filters['status'] ?? 'all') !== 'all', fn ($query) => $query->where('status', $filters['status']))->when($filters['search'] ?? null, fn ($query, $search) => $query->where(function ($nested) use ($search) {$nested->where('public_id', 'like', "%{$search}%")->orWhereHas('user', fn ($users) => $users->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));}));
+        return $orders->paginate($filters['per_page'] ?? 20)->through(fn (Order $order) => [...$this->order($order, $settings), 'status' => $order->status, 'buyer' => ['name' => $order->user?->name, 'email' => $order->user?->email]]);
+    }
+
+    public function adminInvoice(Request $request, Order $order, MarketplaceSettings $settings)
+    {
+        abort_unless(in_array($request->user()?->role, ['admin', 'superadmin'], true), 403, 'Admin access required.');
+        abort_unless($order->status === 'paid', 404);
+        $order->loadMissing('items', 'user');
+        return response()->json(['invoice' => ['number' => $this->invoiceNumber($order, $settings), 'issued_at' => $order->paid_at, 'seller' => $settings->group('billing'), 'buyer' => ['name' => $order->user->name, 'email' => $order->user->email], 'order' => $this->order($order, $settings)]]);
+    }
+
 
     private function invoiceNumber(Order $order, MarketplaceSettings $settings): string
     {

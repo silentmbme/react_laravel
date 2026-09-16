@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Str;
+use App\Services\MarketplaceEmail;
 
 class User extends Authenticatable
 {
@@ -21,6 +23,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'first_name',
         'last_name',
         'email',
@@ -34,6 +37,8 @@ class User extends Authenticatable
      *
      * @var list<string>
      */
+    protected $appends = ['is_staff', 'admin_access', 'review_access'];
+
     protected $hidden = [
         'password',
         'remember_token',
@@ -44,7 +49,15 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
-    public function permissions(){ return $this->hasMany(UserPermission::class); }
+    protected static function booted(): void { static::creating(function (self $user) { if (filled($user->username)) return; $base=Str::of($user->email ?: $user->name ?: "member")->before("@")->lower()->replaceMatches("/[^a-z0-9_-]/", "-")->trim("-"); $user->username=Str::substr(($base->length() >= 3 ? $base : Str::of("member"))."-".Str::lower(Str::random(7)),0,32); }); }
+        public function permissions(){ return $this->hasMany(UserPermission::class); }
+    public function customRole(){ return $this->belongsTo(CustomRole::class, 'role', 'slug')->where('is_active', true); }
+    public function isStaff(): bool { return in_array($this->role, ['superadmin', 'admin', 'reviewer'], true) || (bool) $this->customRole?->is_staff; }
+    public function hasPermission(string $permission): bool { if ($this->role === 'superadmin') return true; if ($permission === 'admin.access' && $this->role === 'admin') return true; if ($permission === 'review.products' && in_array($this->role, ['admin', 'reviewer'], true)) return true; if ($this->permissions()->where('permission', $permission)->exists()) return true; return in_array($permission, $this->customRole?->permissions ?? [], true); }
+    public function getIsStaffAttribute(): bool { return $this->isStaff(); }
+    public function getAdminAccessAttribute(): bool { return $this->hasPermission('admin.access'); }
+    public function getReviewAccessAttribute(): bool { return $this->hasPermission('review.products'); }
+    public function sendPasswordResetNotification($token): void { $url=rtrim(config("app.frontend_url", config("app.url")),"/")."/reset-password?token=".urlencode($token)."&email=".urlencode($this->email); MarketplaceEmail::queue($this->email,"Reset your MarketPlace password","<p>Hello ".e($this->name).",</p><p>We received a request to reset your password.</p><p><a href=\"".e($url)."\">Reset your password</a></p><p>This link expires in 60 minutes. If you did not request it, you can ignore this email.</p>"); }
 
     protected function casts(): array
     {

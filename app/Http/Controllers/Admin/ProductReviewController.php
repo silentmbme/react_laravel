@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductReview;
+use App\Models\ProductVersion;
 use App\Models\ProductReviewMessage;
 use App\Models\User;
 use App\Models\UserPermission;
+use App\Notifications\MarketplaceNotification;
 use App\Services\MarketplaceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -62,6 +64,8 @@ class ProductReviewController extends Controller
         $status = $values['decision'] === 'approved' ? 'published' : ($values['decision'] === 'changes_requested' ? 'changes_requested' : 'rejected');
         ProductReview::create(['product_id' => $product->id, 'reviewer_id' => Auth::id(), 'decision' => $values['decision'], 'note' => $values['note']]);
         $product->update(['status' => $status]);
+        $label = $values['decision'] === 'approved' ? 'approved' : ($values['decision'] === 'changes_requested' ? 'needs changes' : 'was rejected');
+        $product->author?->notify(new MarketplaceNotification(['title' => 'Product review update','body' => $product->name.' '.$label.'.','url' => '/user/portfolio/'.$product->slug,'kind' => 'review']));
         return response()->json(['message' => 'Review decision saved.']);
     }
 
@@ -69,7 +73,9 @@ class ProductReviewController extends Controller
     {
         abort_unless($this->reviewer() || $product->author_id === Auth::id(), 403);
         $values = $request->validate(['message' => ['required', 'string', 'max:5000']]);
-        return ProductReviewMessage::create(['product_id' => $product->id, 'user_id' => Auth::id(), 'message' => $values['message']]);
+        $message = ProductReviewMessage::create(['product_id' => $product->id, 'user_id' => Auth::id(), 'message' => $values['message']]);
+        if ($product->author_id !== Auth::id()) { $product->author?->notify(new MarketplaceNotification(['title' => 'Reviewer message','body' => 'You have a new review message about '.$product->name.'.','url' => '/user/portfolio/'.$product->slug,'kind' => 'review'])); }
+        return $message;
     }
 
     public function download(Product $product, MarketplaceSettings $settings)
@@ -93,7 +99,7 @@ class ProductReviewController extends Controller
     public function reviewers()
     {
         $this->superadmin();
-        return User::whereIn('role', ['admin', 'reviewer'])->with('permissions')->get(['id', 'name', 'email', 'role']);
+        return User::whereIn('role', array_merge(['admin', 'reviewer'], \App\Models\CustomRole::where('is_staff', true)->where('is_active', true)->pluck('slug')->all()))->with(['permissions','customRole'])->get(['id', 'name', 'email', 'role']);
     }
 
     public function permission(Request $request, User $user)
@@ -106,5 +112,24 @@ class ProductReviewController extends Controller
             UserPermission::where(['user_id' => $user->id, 'permission' => 'review.products'])->delete();
         }
         return response()->json(['message' => 'Permission updated.']);
+    }    public function updateQueue(Request $request)
+    {
+        abort_unless($this->reviewer(), 403);
+        return ProductVersion::with(['product:id,name,slug,author_id,file,version','product.author:id,name'])->where('status','pending')->latest('submitted_at')->paginate(20);
+    }
+
+    public function decideUpdate(Request $request, ProductVersion $version)
+    {
+        abort_unless($this->reviewer(), 403);
+        abort_unless($version->status === 'pending', 422, 'This update is not awaiting review.');
+        $data = $request->validate(['decision' => ['required','in:approved,changes_requested,rejected']]);
+        $product = $version->product;
+        if ($data['decision'] === 'approved') {
+            $snapshot = $version->snapshot;
+            $product->update(['file' => $snapshot['file'], 'version' => $snapshot['version']]);
+        }
+        $version->update(['status' => $data['decision'], 'reviewed_at' => now()]);
+        $version->submitted_by && User::find($version->submitted_by)?->notify(new MarketplaceNotification(['title' => 'Product update review','body' => $product->name.' update '.$data['decision'].'.','url' => '/user/portfolio','kind' => 'review']));
+        return response()->json(['message' => $data['decision'] === 'approved' ? 'Update approved and live file replaced.' : 'Update review saved.', 'version' => $version->fresh()]);
     }
 }
