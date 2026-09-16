@@ -8,14 +8,15 @@ use App\Services\MarketplaceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
+use App\Services\MarketplaceEmail;
 use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
 {
     private array $secretFields = [
         'r2' => ['access_key_id', 'secret_access_key'],
-        'mail' => ['password'],
-        'payments' => ['stripe_secret_key', 'stripe_webhook_secret', 'razorpay_key_secret', 'razorpay_webhook_secret', 'paypal_client_secret', 'paypal_webhook_id'],
+        'mail' => ['gmail_client_id','gmail_client_secret','gmail_refresh_token'],
+        'payments' => ['stripe_secret_key', 'stripe_webhook_secret', 'stripe_connect_webhook_secret', 'razorpay_key_secret', 'razorpay_webhook_secret', 'paypal_client_secret', 'paypal_webhook_id'],
     ];
 
     private function authorizeSuperadmin(Request $request): void
@@ -62,6 +63,11 @@ class SettingsController extends Controller
                 'stripe_publishable_key' => ['nullable', 'string', 'max:255'],
                 'stripe_secret_key' => ['nullable', 'string', 'max:255'],
                 'stripe_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'stripe_connect_enabled' => ['nullable', 'boolean'],
+                'stripe_connect_account_type' => ['nullable', 'in:express'],
+                'stripe_connect_default_country' => ['nullable', 'size:2'],
+                'stripe_connect_webhook_secret' => ['nullable', 'string', 'max:255'],
+                'stripe_connect_transfers_enabled' => ['nullable', 'boolean'],
                 'razorpay_key_id' => ['nullable', 'string', 'max:255'],
                 'razorpay_key_secret' => ['nullable', 'string', 'max:255'],
                 'razorpay_webhook_secret' => ['nullable', 'string', 'max:255'],
@@ -91,12 +97,10 @@ class SettingsController extends Controller
                 'handling_fee_mid_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             ],
             'mail' => [
-                'mailer' => ['nullable', 'in:smtp,log,array'],
-                'host' => ['nullable', 'string', 'max:255'],
-                'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-                'username' => ['nullable', 'string', 'max:255'],
-                'password' => ['nullable', 'string', 'max:255'],
-                'encryption' => ['nullable', 'in:tls,ssl,null'],
+                'gmail_client_id' => ['nullable', 'string', 'max:255'],
+                'gmail_client_secret' => ['nullable', 'string', 'max:255'],
+                'gmail_refresh_token' => ['nullable', 'string', 'max:2000'],
+                'provider' => ['nullable', 'in:gmail_api'],
                 'from_address' => ['nullable', 'email', 'max:255'],
                 'from_name' => ['nullable', 'string', 'max:255'],
             ],
@@ -138,21 +142,8 @@ class SettingsController extends Controller
         $this->authorizeSuperadmin($request);
         $request->validate(['to' => ['required', 'email']]);
 
-        $settings = (new MarketplaceSettings())->group('mail');
-        Config::set('mail.default', $settings['mailer'] ?? config('mail.default'));
-        Config::set('mail.mailers.smtp.host', $settings['host'] ?? config('mail.mailers.smtp.host'));
-        Config::set('mail.mailers.smtp.port', $settings['port'] ?? config('mail.mailers.smtp.port'));
-        Config::set('mail.mailers.smtp.username', $settings['username'] ?? config('mail.mailers.smtp.username'));
-        Config::set('mail.mailers.smtp.password', $settings['password'] ?? config('mail.mailers.smtp.password'));
-        Config::set('mail.mailers.smtp.scheme', ($settings['encryption'] ?? null) === 'ssl' ? 'smtps' : null);
-        Config::set('mail.from.address', $settings['from_address'] ?? config('mail.from.address'));
-        Config::set('mail.from.name', $settings['from_name'] ?? config('mail.from.name'));
-
-        Mail::raw('This is a marketplace settings test email.', function ($message) use ($request) {
-            $message->to($request->to)->subject('Marketplace mail settings test');
-        });
-
-        return response()->json(['message' => 'Test email sent.']);
+        MarketplaceEmail::queue($request->to, 'Marketplace mail settings test', '<p>This is a marketplace settings test email.</p>');
+        return response()->json(['message' => 'Test email queued.']);
     }
 
     private function webhookUrls(Request $request): array

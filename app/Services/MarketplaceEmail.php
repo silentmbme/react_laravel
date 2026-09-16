@@ -1,0 +1,1 @@
+<?php namespace App\Services; use App\Jobs\SendMarketplaceEmail; class MarketplaceEmail { public static function queue(string $to,string $subject,string $html):void{SendMarketplaceEmail::dispatch($to,$subject,$html)->onQueue("emails")->afterCommit();} public function sendNow(string $to,string $subject,string $html):void{app(GmailApiMailer::class)->send($to,$subject,$html);} }

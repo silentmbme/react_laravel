@@ -27,6 +27,7 @@ class CartController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate(['product_license_id'=>['required','integer','exists:product_licenses,id']]);
+        abort_unless(in_array($request->user()->role, ['customer', 'author'], true), 403, 'Only customer and author accounts can purchase products.');
         $productLicense = ProductLicense::query()->with('product:id,author_id,status')->findOrFail($data['product_license_id']);
         abort_unless($productLicense->product?->status === 'published', 422, 'This product is not available to purchase.');
         abort_unless($productLicense->product?->author_id !== $request->user()->id, 422, 'Authors cannot purchase their own products.');
@@ -41,6 +42,7 @@ class CartController extends Controller
     {
         abort_unless($cartItem->user_id === $request->user()->id, 404);
         $data = $request->validate(['quantity'=>['nullable','integer','min:1','max:99'],'product_license_id'=>['nullable','integer','exists:product_licenses,id']]);
+        abort_unless(in_array($request->user()->role, ['customer', 'author'], true), 403, 'Only customer and author accounts can purchase products.');
         abort_unless(!empty($data), 422, 'Choose a quantity or license.');
         if (!empty($data['product_license_id'])) {
             $license=ProductLicense::query()->with('product:id,author_id,status')->findOrFail($data['product_license_id']);

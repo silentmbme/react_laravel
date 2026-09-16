@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
+Route::post('/forgot-password', [\App\Http\Controllers\API\PasswordResetController::class, 'requestLink'])->middleware('throttle:5,1');
+Route::post('/reset-password', [\App\Http\Controllers\API\PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
+Route::get('/usernames/availability', [AuthController::class, 'usernameAvailability'])->middleware('throttle:30,1');
 Route::get('/marketplace/home', [\App\Http\Controllers\Public\MarketplaceController::class, 'home']);
 Route::get('/marketplace/search', [\App\Http\Controllers\Public\MarketplaceController::class, 'search']);
 Route::post('/purchase-verifications', [\App\Http\Controllers\Public\PurchaseVerificationController::class, 'verify'])->middleware('throttle:30,1');
@@ -40,13 +43,30 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/support/tickets/{ticket}/messages', [\App\Http\Controllers\Public\SupportTicketController::class, 'message'])->middleware('throttle:40,1');
     Route::post('/support/tickets/{ticket}/close', [\App\Http\Controllers\Public\SupportTicketController::class, 'close']);
     Route::get('/finance/customer-statement', [\App\Http\Controllers\Finance\FinanceController::class, 'customerStatement']);
+    Route::get('/notifications', [\App\Http\Controllers\Public\NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\Public\NotificationController::class, 'readAll']);
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Public\NotificationController::class, 'read']);
+    Route::get('/profile', [\App\Http\Controllers\Public\ProfileController::class, 'show']);
+    Route::put('/profile', [\App\Http\Controllers\Public\ProfileController::class, 'update']);
+    Route::put('/profile/password', [\App\Http\Controllers\Public\ProfileController::class, 'password']);
     Route::get('/finance/invoices/{order:public_id}', [\App\Http\Controllers\Finance\FinanceController::class, 'invoice']);
     Route::get('/finance/author-statement', [\App\Http\Controllers\Finance\FinanceController::class, 'authorStatement']);
     Route::get('/admin/finance/overview', [\App\Http\Controllers\Finance\FinanceController::class, 'adminOverview']);
+    Route::get('/admin/finance/summary', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'summary']);
+    Route::get('/admin/finance/transactions', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'transactions']);
+    Route::get('/admin/payouts', [\App\Http\Controllers\Finance\PayoutController::class, 'index']);
+    Route::post('/admin/payouts', [\App\Http\Controllers\Finance\PayoutController::class, 'request']);
+    Route::post('/admin/orders/{order}/refunds', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'refund']);
+    Route::get('/admin/finance/taxes', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'taxes']);
+    Route::post('/admin/finance/taxes', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'storeTax']);
+    Route::get('/admin/orders', [\App\Http\Controllers\Finance\FinanceController::class, 'adminOrders']);
+    Route::get('/admin/orders/{order:public_id}/invoice', [\App\Http\Controllers\Finance\FinanceController::class, 'adminInvoice']);
     Route::post('/downloads/{entitlement}', [\App\Http\Controllers\Public\CheckoutController::class, 'download']);
     Route::prefix('admin')->group(function () {
         Route::get('/users', [UsersController::class, 'index'])->middleware('admin');
         Route::get('/agents', [\App\Http\Controllers\Admin\AgentController::class, 'index']);
+        Route::get('/agent-roles', [\App\Http\Controllers\Admin\AgentController::class, 'roles']);
+        Route::post('/agent-roles', [\App\Http\Controllers\Admin\AgentController::class, 'storeRole']);
         Route::get('/commission-tiers', [\App\Http\Controllers\Admin\CommissionTierController::class, 'index']);
         Route::post('/commission-tiers', [\App\Http\Controllers\Admin\CommissionTierController::class, 'store']);
         Route::put('/commission-tiers/{commissionTier}', [\App\Http\Controllers\Admin\CommissionTierController::class, 'update']);
@@ -58,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/products', [AdminProductController::class, 'index'])->middleware('admin');
         Route::get('/review-queue', [\App\Http\Controllers\Admin\ProductReviewController::class, 'queue']);
+        Route::get('/review-updates', [\App\Http\Controllers\Admin\ProductReviewController::class, 'updateQueue']);
+        Route::post('/product-updates/{version}/review', [\App\Http\Controllers\Admin\ProductReviewController::class, 'decideUpdate']);
         Route::get('/products/{product}/download', [\App\Http\Controllers\Admin\ProductReviewController::class, 'download']);
         Route::get('/reviewers', [\App\Http\Controllers\Admin\ProductReviewController::class, 'reviewers']);
         Route::put('/reviewers/{user}/permission', [\App\Http\Controllers\Admin\ProductReviewController::class, 'permission']);

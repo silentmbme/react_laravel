@@ -15,7 +15,7 @@ class OrderService {
    $subtotal+=$unitPrice*$quantity;$buyerFeeTotal+=$unitBuyerFee*$quantity;$items[]=['id'=>$entry->id,'name'=>$entry->product->name,'license'=>$entry->productLicense->license?->name??'License','quantity'=>$quantity,'unit_price'=>$unitPrice,'unit_buyer_fee'=>$unitBuyerFee,'total'=>round(($unitPrice+$unitBuyerFee)*$quantity,2)];
   }
   $handling=$this->handlingFee(round($subtotal+$buyerFeeTotal,2),$settings->group('billing'));
-  return ['currency'=>$currency,'items'=>$items,'subtotal'=>round($subtotal,2),'buyer_fee_total'=>round($buyerFeeTotal,2),'handling_fee'=>$handling,'tax'=>0.0,'total'=>round($subtotal+$buyerFeeTotal+$handling,2)];
+  $tax=app(TaxCalculationService::class)->calculate(number_format($subtotal+$buyerFeeTotal+$handling,2,'.',''),$currency);return ['currency'=>$currency,'items'=>$items,'subtotal'=>round($subtotal,2),'discount_total'=>0.0,'buyer_fee_total'=>round($buyerFeeTotal,2),'handling_fee'=>$handling,'tax'=>(float)$tax['amount'],'tax_snapshot'=>$tax['snapshot'],'total'=>round($subtotal+$buyerFeeTotal+$handling+((['snapshot']['inclusive']??false)?0:(float)$tax['amount']),2)];
  }
  public function createFromCart(int $userId,string $provider,string $currency,MarketplaceSettings $settings):Order {
   return DB::transaction(function()use($userId,$provider,$currency,$settings){
@@ -33,7 +33,7 @@ class OrderService {
     $quantity=max(1,(int)$entry->quantity);$itemSubtotal+=$price*$quantity;$buyerFeeTotal+=$unitBuyerFee*$quantity;$lines[]=compact('entry','price','unitBuyerFee','quantity');
    }
    $listTotal=round($itemSubtotal+$buyerFeeTotal,2);$handling=$this->handlingFee($listTotal,$settings->group('billing'));
-   $order=Order::create(['public_id'=>(string)Str::uuid(),'user_id'=>$userId,'provider'=>$provider,'status'=>'pending','currency'=>$currency,'subtotal'=>round($itemSubtotal,2),'buyer_fee_total'=>round($buyerFeeTotal,2),'tax'=>0,'handling_fee'=>$handling,'total'=>round($listTotal+$handling,2)]);
+   $tax=app(TaxCalculationService::class)->calculate(number_format($listTotal+$handling,2,'.',''),$currency);$order=Order::create(['public_id'=>(string)Str::uuid(),'user_id'=>$userId,'provider'=>$provider,'status'=>'pending','currency'=>$currency,'subtotal'=>round($itemSubtotal,2),'discount_total'=>0,'buyer_fee_total'=>round($buyerFeeTotal,2),'tax'=>$tax['amount'],'tax_snapshot'=>$tax['snapshot'],'handling_fee'=>$handling,'total'=>($tax['snapshot']['inclusive']??false)?number_format($listTotal+$handling,2,'.',''):bcadd(number_format($listTotal+$handling,2,'.',''),$tax['amount'],2)]);
    foreach($lines as $line){$entry=$line['entry'];OrderItem::create(['order_id'=>$order->id,'product_id'=>$entry->product_id,'product_license_id'=>$entry->product_license_id,'product_name'=>$entry->product->name,'license_name'=>$entry->productLicense->license?->name??'License','quantity'=>$line['quantity'],'unit_price'=>$line['price'],'unit_buyer_fee'=>$line['unitBuyerFee'],'buyer_fee_total'=>round($line['unitBuyerFee']*$line['quantity'],2),'total'=>round(($line['price']+$line['unitBuyerFee'])*$line['quantity'],2)]);}
    return $order->load('items');
   });
