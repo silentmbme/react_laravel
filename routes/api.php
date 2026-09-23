@@ -18,6 +18,7 @@ Route::post('/forgot-password', [\App\Http\Controllers\API\PasswordResetControll
 Route::post('/reset-password', [\App\Http\Controllers\API\PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
 Route::get('/usernames/availability', [AuthController::class, 'usernameAvailability'])->middleware('throttle:30,1');
 Route::get('/marketplace/home', [\App\Http\Controllers\Public\MarketplaceController::class, 'home']);
+Route::get('/marketplace/theme', [\App\Http\Controllers\Public\MarketplaceController::class, 'theme']);
 Route::get('/marketplace/search', [\App\Http\Controllers\Public\MarketplaceController::class, 'search']);
 Route::post('/purchase-verifications', [\App\Http\Controllers\Public\PurchaseVerificationController::class, 'verify'])->middleware('throttle:30,1');
 Route::post('/payments/stripe/webhook', [\App\Http\Controllers\Public\CheckoutController::class, 'stripeWebhook']);
@@ -51,6 +52,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile/password', [\App\Http\Controllers\Public\ProfileController::class, 'password']);
     Route::get('/finance/invoices/{order:public_id}', [\App\Http\Controllers\Finance\FinanceController::class, 'invoice']);
     Route::get('/finance/author-statement', [\App\Http\Controllers\Finance\FinanceController::class, 'authorStatement']);
+    Route::get('/author/finance-profile', [\App\Http\Controllers\Finance\AuthorFinanceController::class, 'show']);
+    Route::put('/author/finance-profile', [\App\Http\Controllers\Finance\AuthorFinanceController::class, 'update']);
+    Route::get('/author/payouts', [\App\Http\Controllers\Finance\AuthorFinanceController::class, 'payouts']);
+    Route::post('/author/payouts/request', [\App\Http\Controllers\Finance\AuthorFinanceController::class, 'requestPayout']);
     Route::get('/admin/finance/overview', [\App\Http\Controllers\Finance\FinanceController::class, 'adminOverview']);
     Route::get('/admin/finance/summary', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'summary']);
     Route::get('/admin/finance/transactions', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'transactions']);
@@ -58,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/payouts', [\App\Http\Controllers\Finance\PayoutController::class, 'request']);
     Route::post('/admin/orders/{order}/refunds', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'refund']);
     Route::get('/admin/finance/taxes', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'taxes']);
+    Route::get('/admin/finance/tax-report', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'taxReport']);
     Route::post('/admin/finance/taxes', [\App\Http\Controllers\Finance\FinancialAdminController::class, 'storeTax']);
     Route::get('/admin/orders', [\App\Http\Controllers\Finance\FinanceController::class, 'adminOrders']);
     Route::get('/admin/orders/{order:public_id}/invoice', [\App\Http\Controllers\Finance\FinanceController::class, 'adminInvoice']);
@@ -119,6 +125,14 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::get('products/{product:slug}',[PortofolioController::class,'publicShow']);
+Route::get('products/{product}/reviews/eligibility',[\App\Http\Controllers\Public\CustomerProductReviewController::class,'eligibility'])->middleware('auth:sanctum');
+Route::get('products/{product:slug}/reviews',[\App\Http\Controllers\Public\CustomerProductReviewController::class,'index']);
+Route::post('products/{product}/reviews',[\App\Http\Controllers\Public\CustomerProductReviewController::class,'store'])->middleware('auth:sanctum');
+Route::get('products/{product:slug}/comments',[\App\Http\Controllers\Public\ProductCommentController::class,'index']);
+Route::post('products/{product}/comments',[\App\Http\Controllers\Public\ProductCommentController::class,'store'])->middleware('auth:sanctum');
+Route::post('products/{product}/feedback/replies',[\App\Http\Controllers\Public\ProductFeedbackController::class,'reply'])->middleware('auth:sanctum');
+Route::post('products/{product}/feedback/reports',[\App\Http\Controllers\Public\ProductFeedbackController::class,'report'])->middleware('auth:sanctum');
+Route::delete('admin/feedback/{type}/{id}',[\App\Http\Controllers\Admin\ProductFeedbackController::class,'destroy'])->middleware('auth:sanctum');
 Route::get('authors/{author}/portfolio',[PortofolioController::class,'publicPortfolio']);
 
 Route::post('admin/products/{product}/review', [\App\Http\Controllers\Admin\ProductReviewController::class, 'decide'])->middleware('auth:sanctum');

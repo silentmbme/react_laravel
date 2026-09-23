@@ -95,8 +95,8 @@ class PortofolioController extends Controller
 
     private function details(Product $product)
     {
-        return $product->load([
-            'author:id,name',
+        return $product->loadCount('customerComments')->load([
+            'author:id,name,freelance_enabled,freelance_url',
             'category:id,name', 'category.licenses:id,name,slug',
             'images:id,product_id,image,sort_order',
             'licenses:id,product_id,license_id,price',

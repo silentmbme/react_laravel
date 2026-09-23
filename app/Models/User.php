@@ -30,6 +30,15 @@ class User extends Authenticatable
         'password',
         'role',
         'status',
+        'freelance_enabled',
+        'freelance_url',
+        'payout_method',
+        'payout_destination',
+        'payout_destination_last4',
+        'tax_residency_country',
+        'tax_form_type',
+        'tax_form_status',
+        'tax_form_completed_at',
     ];
 
     /**
@@ -64,6 +73,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'payout_destination' => 'encrypted',
+            'tax_form_completed_at' => 'datetime',
         ];
     }
 }
