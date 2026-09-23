@@ -47,6 +47,8 @@ class SettingsController extends Controller
             'general' => [
                 'marketplace_name' => ['nullable', 'string', 'max:120'],
                 'support_email' => ['nullable', 'email', 'max:255'],
+                'primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+                'secondary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             ],
             'r2' => [
                 'access_key_id' => ['nullable', 'string', 'max:255'],

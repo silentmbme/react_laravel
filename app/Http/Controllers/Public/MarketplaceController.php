@@ -3,12 +3,23 @@
 namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\ApplicationSetting;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
 class MarketplaceController extends Controller
 {
+    public function theme()
+    {
+        $general = ApplicationSetting::where('group', 'general')->value('payload') ?? [];
+
+        return response()->json([
+            'primary_color' => $general['primary_color'] ?? '#8B3F72',
+            'secondary_color' => $general['secondary_color'] ?? '#D4664C',
+        ]);
+    }
+
     public function search(Request $request)
     {
         $values = $request->validate(['q'=>['nullable','string','max:120'],'category'=>['nullable','integer','exists:categories,id'],'min_price'=>['nullable','numeric','min:0'],'max_price'=>['nullable','numeric','gte:min_price'],'rating'=>['nullable','numeric','min:1','max:5'],'sales'=>['nullable','in:any,low,medium,high'],'date_added'=>['nullable','in:any,week,month,year'],'sort'=>['nullable','in:match,sales,latest,rating,price_asc,price_desc']]);

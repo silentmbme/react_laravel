@@ -7,6 +7,8 @@ class Product extends Model {
  protected $casts=['support_enabled'=>'boolean'];
  public function versions(){return $this->hasMany(ProductVersion::class);}
  public function reviews(){return $this->hasMany(ProductReview::class);}
+ public function customerReviews(){return $this->hasMany(CustomerProductReview::class);}
+ public function customerComments(){return $this->hasMany(ProductComment::class);}
  public function reviewMessages(){return $this->hasMany(ProductReviewMessage::class);}
  public function author(){return $this->belongsTo(User::class);}
  public function category(){return $this->belongsTo(Category::class);}

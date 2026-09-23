@@ -1,0 +1,11 @@
+<?php
+namespace App\Http\Controllers\Public;
+use App\Http\Controllers\Controller;
+use App\Models\CustomerProductReview;
+use App\Models\OrderItem;
+use App\Models\Product;
+use Illuminate\Http\Request;
+class CustomerProductReviewController extends Controller {
+ public function index(Product $product){abort_unless($product->status==='published',404);return response()->json(['reviews'=>CustomerProductReview::where('product_id',$product->id)->with(['user:id,name','replies.user:id,name'])->latest()->paginate(10),'summary'=>['rating'=>(float)$product->rating,'count'=>(int)$product->reviews_count]]);}
+ public function eligibility(Request $request,Product $product){abort_unless($product->status==='published',404);$user=$request->user();$canReview=$user&&$product->author_id!==$user->id&&OrderItem::where('product_id',$product->id)->whereHas('order',fn($q)=>$q->where('user_id',$user->id)->where('status','paid'))->exists();return response()->json(['can_review'=>(bool)$canReview]);} public function store(Request $request,Product $product){abort_unless($product->status==='published',404);$user=$request->user();abort_unless($user&&$product->author_id!==$user->id,403,'You cannot review your own product.');$purchased=OrderItem::where('product_id',$product->id)->whereHas('order',fn($q)=>$q->where('user_id',$user->id)->where('status','paid'))->exists();abort_unless($purchased,403,'Only verified purchasers can review this product.');$data=$request->validate(['rating'=>['required','integer','between:1,5'],'comment'=>['nullable','string','max:2000']]);$review=CustomerProductReview::updateOrCreate(['product_id'=>$product->id,'user_id'=>$user->id],$data);$stats=CustomerProductReview::where('product_id',$product->id)->selectRaw('AVG(rating) average_rating, COUNT(*) review_count')->first();$product->update(['rating'=>round((float)$stats->average_rating,2),'reviews_count'=>(int)$stats->review_count]);return response()->json(['review'=>$review->load('user:id,name'),'summary'=>['rating'=>(float)$product->rating,'count'=>(int)$product->reviews_count]]);}
+}
